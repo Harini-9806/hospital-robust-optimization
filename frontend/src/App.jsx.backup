@@ -1,0 +1,227 @@
+import { useEffect, useState } from 'react'
+import './App.css'
+
+const API_URL = 'http://localhost:5000'
+
+const navigation = [
+  { label: 'Dashboard', path: '/', icon: 'DB', group: 'Overview' },
+  { label: 'Patients', path: '/patients', icon: 'PT', group: 'Operations' },
+  { label: 'Beds', path: '/beds', icon: 'BD', group: 'Operations' },
+  { label: 'Wards', path: '/wards', icon: 'WD', group: 'Operations' },
+  { label: 'Patient Flow', path: '/patient-flow', icon: 'PF', group: 'Operations' },
+  { label: 'Demand Management', path: '/demand-management', icon: 'DM', group: 'Planning' },
+  { label: 'Robust Optimization', path: '/robust-optimization', icon: 'RO', group: 'Planning' },
+  { label: 'Gamma Analysis', path: '/gamma-analysis', icon: 'GA', group: 'Planning' },
+  { label: 'Optimization Results', path: '/optimization-results', icon: 'OR', group: 'Planning' },
+]
+
+const defaultWards = [
+  { ward_id: 'icu', ward_name: 'ICU', available_beds: 12, nominal_demand: 5, maximum_deviation: 4 },
+  { ward_id: 'general', ward_name: 'General', available_beds: 12, nominal_demand: 5, maximum_deviation: 4 },
+]
+
+const routeLabels = Object.fromEntries(navigation.map((item) => [item.path, item.label]))
+
+function currentPath() {
+  return window.location.pathname || '/'
+}
+
+function navigate(path) {
+  window.history.pushState({}, '', path)
+  window.dispatchEvent(new PopStateEvent('popstate'))
+}
+
+function App() {
+  const [path, setPath] = useState(currentPath)
+  const [token, setToken] = useState(() => localStorage.getItem('hospital_token'))
+  const [user, setUser] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('hospital_user'))
+    } catch {
+      return null
+    }
+  })
+
+  useEffect(() => {
+    const handlePopState = () => setPath(currentPath())
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  function signIn(nextToken, nextUser) {
+    localStorage.setItem('hospital_token', nextToken)
+    localStorage.setItem('hospital_user', JSON.stringify(nextUser))
+    setToken(nextToken)
+    setUser(nextUser)
+    navigate('/')
+  }
+
+  function signOut() {
+    localStorage.removeItem('hospital_token')
+    localStorage.removeItem('hospital_user')
+    setToken(null)
+    setUser(null)
+    navigate('/login')
+  }
+
+  if (!token || path === '/login') {
+    return <LoginPage onLogin={signIn} hasSession={Boolean(token)} />
+  }
+
+  return (
+    <Shell path={path} user={user} onNavigate={navigate} onSignOut={signOut}>
+      {path === '/robust-optimization' ? <OptimizationPage token={token} /> : <PageContent path={path} />}
+    </Shell>
+  )
+}
+
+function LoginPage({ onLogin, hasSession }) {
+  const [email, setEmail] = useState('admin@hospital.com')
+  const [password, setPassword] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function submit(event) {
+    event.preventDefault()
+    setLoading(true)
+    setError('')
+    try {
+      const response = await fetch(`${API_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.message || 'Unable to sign in')
+      onLogin(payload.token, payload.user)
+    } catch (requestError) {
+      setError(requestError.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (hasSession) return null
+
+  return (
+    <main className="min-h-screen bg-[#f3f8fa] px-6 py-8 text-[#17324d]">
+      <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl overflow-hidden rounded-[2rem] bg-white shadow-[0_24px_80px_rgba(18,54,76,0.12)] lg:grid-cols-[1.05fr_0.95fr]">
+        <section className="relative overflow-hidden bg-[#123e52] px-8 py-10 text-white sm:px-14 sm:py-14">
+          <div className="absolute -right-24 -top-20 h-72 w-72 rounded-full border-[32px] border-[#6db6a4]/20" />
+          <div className="relative flex h-full flex-col justify-between">
+            <div>
+              <div className="mb-16 flex items-center gap-3 text-sm font-bold tracking-[0.18em] text-[#9fe0c5]">
+                <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#9fe0c5] text-[#123e52]">+</span>
+                CAREFLOW
+              </div>
+              <p className="mb-4 text-sm font-semibold uppercase tracking-[0.24em] text-[#9fe0c5]">Hospital operations</p>
+              <h1 className="max-w-lg text-4xl font-semibold leading-tight sm:text-6xl">Clarity for every care decision.</h1>
+              <p className="mt-6 max-w-md text-lg leading-8 text-[#c5d9df]">A calm command center for patient flow, bed capacity, and demand-aware planning.</p>
+            </div>
+            <div className="mt-16 grid max-w-md grid-cols-3 gap-3 text-sm">
+              <Metric label="Beds monitored" value="200" />
+              <Metric label="Live wards" value="04" />
+              <Metric label="Planning mode" value="Γ" />
+            </div>
+          </div>
+        </section>
+        <section className="flex items-center px-8 py-12 sm:px-16">
+          <form onSubmit={submit} className="w-full max-w-md">
+            <p className="mb-3 text-sm font-bold uppercase tracking-[0.2em] text-[#4f8a86]">Secure workspace</p>
+            <h2 className="text-3xl font-semibold text-[#17324d]">Welcome back</h2>
+            <p className="mt-3 text-[#698093]">Sign in to access the hospital operations console.</p>
+            <label className="mt-10 block text-sm font-semibold text-[#31516a]">Email address<input value={email} onChange={(event) => setEmail(event.target.value)} type="email" className="field mt-2" required /></label>
+            <label className="mt-5 block text-sm font-semibold text-[#31516a]">Password<input value={password} onChange={(event) => setPassword(event.target.value)} type="password" className="field mt-2" required /></label>
+            {error && <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+            <button disabled={loading} className="mt-8 w-full rounded-xl bg-[#dd765d] px-5 py-3.5 font-bold text-white shadow-lg shadow-[#dd765d]/20 transition hover:bg-[#c9634e] disabled:cursor-wait disabled:opacity-60">{loading ? 'Signing in...' : 'Sign in to Careflow'}</button>
+            <p className="mt-5 text-center text-xs text-[#8294a0]">Use your existing hospital account credentials.</p>
+          </form>
+        </section>
+      </div>
+    </main>
+  )
+}
+
+function Shell({ path, user, onNavigate, onSignOut, children }) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const activeLabel = routeLabels[path] || 'Dashboard'
+  const groups = [...new Set(navigation.map((item) => item.group))]
+
+  return (
+    <div className="min-h-screen bg-[#f4f8fb] text-[#17324d]">
+      <aside className={`${menuOpen ? 'translate-x-0' : '-translate-x-full'} fixed inset-y-0 left-0 z-30 w-72 bg-[#123e52] px-5 py-6 text-white transition-transform lg:translate-x-0`}>
+        <div className="flex items-center gap-3 px-3"><span className="grid h-10 w-10 place-items-center rounded-xl bg-[#9fe0c5] text-lg font-black text-[#123e52]">+</span><div><p className="font-black tracking-[0.15em]">CAREFLOW</p><p className="text-xs text-[#9fc2c8]">Operations console</p></div></div>
+        <nav className="mt-12 space-y-7" aria-label="Main navigation">
+          {groups.map((group) => <div key={group}><p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.2em] text-[#7daab3]">{group}</p><div className="space-y-1">{navigation.filter((item) => item.group === group).map((item) => <button key={item.path} onClick={() => { onNavigate(item.path); setMenuOpen(false) }} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${path === item.path ? 'bg-[#e7f1eb] text-[#123e52]' : 'text-[#c2d9dd] hover:bg-white/10 hover:text-white'}`}><span className={`grid h-7 w-7 place-items-center rounded-lg text-[9px] font-black ${path === item.path ? 'bg-[#9fe0c5] text-[#123e52]' : 'bg-white/10 text-[#9fe0c5]'}`}>{item.icon}</span>{item.label}</button>)}</div></div>)}
+        </nav>
+        <div className="absolute bottom-6 left-5 right-5 rounded-2xl border border-white/10 bg-white/5 p-4"><p className="text-xs text-[#92b8bf]">System status</p><div className="mt-2 flex items-center gap-2 text-sm font-semibold"><span className="h-2 w-2 rounded-full bg-[#9fe0c5]" /> API connected</div></div>
+      </aside>
+      {menuOpen && <button aria-label="Close navigation" className="fixed inset-0 z-20 bg-[#123e52]/40 lg:hidden" onClick={() => setMenuOpen(false)} />}
+      <div className="lg:pl-72"><header className="sticky top-0 z-10 flex h-20 items-center justify-between border-b border-[#dce8ec] bg-[#f4f8fb]/95 px-5 backdrop-blur sm:px-8"><div className="flex items-center gap-4"><button className="rounded-lg p-2 text-[#31516a] lg:hidden" onClick={() => setMenuOpen(true)} aria-label="Open navigation">☰</button><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-[#7b96a5]">Hospital operations</p><h1 className="text-xl font-semibold">{activeLabel}</h1></div></div><div className="flex items-center gap-3"><div className="hidden text-right sm:block"><p className="text-sm font-bold">{user?.name || 'Admin User'}</p><p className="text-xs capitalize text-[#7b96a5]">{user?.role || 'administrator'}</p></div><button onClick={onSignOut} className="rounded-xl border border-[#c9dce1] bg-white px-3 py-2 text-xs font-bold text-[#31516a] hover:border-[#dd765d] hover:text-[#c9634e]">Sign out</button></div></header><main className="page-enter mx-auto max-w-[1440px] px-5 py-8 sm:px-8">{children}</main></div>
+    </div>
+  )
+}
+
+function PageContent({ path }) {
+  const label = routeLabels[path] || 'Dashboard'
+  if (path === '/') return <Dashboard />
+  const descriptions = { '/patients': 'Track admissions, acuity, and current patient movement.', '/beds': 'Review available, occupied, reserved, and maintenance capacity.', '/wards': 'Maintain a clear view of every care area and its operating profile.', '/patient-flow': 'Follow movement through intake, placement, and discharge.', '/demand-management': 'Review nominal demand and uncertainty inputs for planning.', '/gamma-analysis': 'Compare protection levels across uncertainty budgets.', '/optimization-results': 'Review the latest allocation recommendations and outcomes.' }
+  return <><PageHeading eyebrow="Workspace module" title={label} description={descriptions[path] || 'A focused workspace for hospital operations.'} /><div className="mt-8 grid gap-5 md:grid-cols-3"><PlaceholderCard title="Coming into focus" value="--" detail="This module is ready for its API-backed workflow." /><PlaceholderCard title="Data connection" value="Ready" detail="The shared authenticated session is available." /><PlaceholderCard title="Next action" value="Explore" detail="Use the navigation to move between work areas." /></div></>
+}
+
+function Dashboard() {
+  return <><PageHeading eyebrow="Tuesday, 05 September 2026" title="Good morning, care team" description="A measured view of today's capacity, flow, and planning signals." action="Review optimization" onAction={() => navigate('/robust-optimization')} /><section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><StatCard label="Available beds" value="50" note="25% of total capacity" tone="mint" /><StatCard label="Current occupancy" value="128" note="64% across all wards" tone="blue" /><StatCard label="Patients waiting" value="04" note="2 require priority placement" tone="coral" /><StatCard label="Open alerts" value="05" note="1 critical · 2 warnings" tone="gold" /></section><section className="mt-6 grid gap-6 xl:grid-cols-[1.3fr_0.7fr]"><div className="panel"><div className="flex items-center justify-between"><div><p className="eyebrow">Capacity pulse</p><h2 className="section-title">Ward availability</h2></div><span className="badge">Live snapshot</span></div><div className="mt-7 space-y-5">{[['ICU','8','30','mint'],['General','20','80','blue'],['Surgical','14','50','gold'],['Emergency','8','40','coral']].map(([name, available, total, tone]) => <div key={name}><div className="mb-2 flex justify-between text-sm"><span className="font-bold">{name}</span><span className="text-[#718899]">{available} available / {total} beds</span></div><div className="h-2.5 overflow-hidden rounded-full bg-[#e8f0f2]"><div className={`h-full rounded-full ${tone === 'mint' ? 'bg-[#67b59d]' : tone === 'blue' ? 'bg-[#5b9eb4]' : tone === 'gold' ? 'bg-[#d7ae5b]' : 'bg-[#dd765d]'}`} style={{ width: `${Number(available) / Number(total) * 100}%` }} /></div></div>)}</div></div><div className="panel bg-[#123e52] text-white"><p className="eyebrow text-[#9fe0c5]">Planning signal</p><h2 className="mt-2 text-2xl font-semibold">Demand is stable, uncertainty is not.</h2><p className="mt-4 text-sm leading-6 text-[#bad0d7]">Run a robust allocation when you need the plan to hold through simultaneous demand shifts.</p><button onClick={() => navigate('/robust-optimization')} className="mt-8 rounded-xl bg-[#9fe0c5] px-4 py-3 text-sm font-bold text-[#123e52]">Open robust planning →</button></div></section></>
+}
+
+function OptimizationPage({ token }) {
+  const [gamma, setGamma] = useState('1')
+  const [wards, setWards] = useState(defaultWards)
+  const [result, setResult] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  function updateWard(index, field, value) { setWards((current) => current.map((ward, wardIndex) => wardIndex === index ? { ...ward, [field]: field === 'ward_name' || field === 'ward_id' ? value : Number(value) } : ward)) }
+  function addWard() { setWards((current) => [...current, { ward_id: `ward-${current.length + 1}`, ward_name: `Ward ${current.length + 1}`, available_beds: 20, nominal_demand: 10, maximum_deviation: 3 }]) }
+  function removeWard(index) { setWards((current) => current.filter((_, wardIndex) => wardIndex !== index)) }
+
+  async function runOptimization(event) {
+    event.preventDefault()
+    setLoading(true)
+    setError('')
+    setResult(null)
+    try {
+      const response = await fetch(`${API_URL}/api/optimization/optimize`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ gamma: Number(gamma), wards }) })
+      const payload = await response.json()
+      if (!response.ok) throw new Error(payload.message || payload.detail || 'Optimization request failed')
+      setResult(payload)
+    } catch (requestError) { setError(requestError.message) } finally { setLoading(false) }
+  }
+
+  return <><PageHeading eyebrow="Planning studio" title="Robust optimization" description="Build a capacity plan that remains resilient as ward demand moves." /><form onSubmit={runOptimization} className="mt-8 grid gap-6 xl:grid-cols-[0.95fr_1.05fr]"><div className="panel"><div className="flex items-start justify-between"><div><p className="eyebrow">Uncertainty budget</p><h2 className="section-title">Set your planning posture</h2></div><span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#e7f1eb] text-xl font-bold text-[#3f897b]">Γ</span></div><label className="mt-8 block text-sm font-bold">Gamma value<span className="mt-2 flex items-center gap-3"><input min="0" max={wards.length} step="0.5" type="number" value={gamma} onChange={(event) => setGamma(event.target.value)} className="field max-w-32 text-lg font-bold" /><span className="text-sm font-normal text-[#718899]">of {wards.length} wards</span></span></label><p className="mt-4 rounded-xl bg-[#f3f8fa] p-4 text-sm leading-6 text-[#60798a]">Gamma controls how many wards may experience their maximum demand deviation at the same time. Higher values reserve more capacity.</p><div className="mt-8 flex gap-3"><button disabled={loading} className="flex-1 rounded-xl bg-[#dd765d] px-4 py-3.5 font-bold text-white transition hover:bg-[#c9634e] disabled:opacity-60">{loading ? 'Calculating...' : 'Run optimization'}</button><button type="button" onClick={() => setWards(defaultWards)} className="rounded-xl border border-[#c9dce1] bg-white px-4 py-3 font-bold text-[#31516a]">Reset</button></div>{error && <p className="mt-4 rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</p>}</div><div className="panel"><div className="flex items-center justify-between"><div><p className="eyebrow">Demand inputs</p><h2 className="section-title">Ward assumptions</h2></div><button type="button" onClick={addWard} className="text-sm font-bold text-[#4f8a86] hover:text-[#dd765d]">+ Add ward</button></div><div className="mt-5 space-y-4">{wards.map((ward, index) => <div key={ward.ward_id} className="rounded-2xl border border-[#dce8ec] bg-[#f8fbfc] p-4"><div className="mb-3 flex items-center justify-between"><input value={ward.ward_name} onChange={(event) => updateWard(index, 'ward_name', event.target.value)} className="w-40 bg-transparent font-bold outline-none" aria-label="Ward name" />{wards.length > 1 && <button type="button" onClick={() => removeWard(index)} className="text-xs font-bold text-[#b46862]">Remove</button>}</div><div className="grid gap-3 sm:grid-cols-3">{[['available_beds','Available beds'],['nominal_demand','Nominal demand'],['maximum_deviation','Max deviation']].map(([field, label]) => <label key={field} className="text-xs font-bold text-[#718899]">{label}<input type="number" min="0" step="1" value={ward[field]} onChange={(event) => updateWard(index, field, event.target.value)} className="field mt-1 bg-white" /></label>)}</div></div>)}</div></div></form>{result && <OptimizationResult result={result} />}</>
+}
+
+function OptimizationResult({ result }) { return <section className="mt-6"><div className="mb-4 flex items-end justify-between"><div><p className="eyebrow">Latest run</p><h2 className="section-title">Recommendation summary</h2></div><span className="badge badge-success">{result.solver_status}</span></div><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5"><StatCard label="Gamma" value={result.gamma} note="Uncertainty budget" tone="blue" /><StatCard label="Available beds" value={result.total_available_beds} note="Across submitted wards" tone="mint" /><StatCard label="Allocated beds" value={result.total_allocated_beds.toFixed(1)} note="Recommended plan" tone="blue" /><StatCard label="Reserved beds" value={result.total_reserved_beds.toFixed(1)} note="Protection buffer" tone="gold" /><StatCard label="Unmet demand" value={result.total_unmet_demand.toFixed(1)} note="Plan shortfall" tone="coral" /></div><div className="panel mt-6 overflow-x-auto"><table className="w-full min-w-[640px] text-left text-sm"><thead><tr className="border-b border-[#dce8ec] text-xs uppercase tracking-[0.12em] text-[#718899]"><th className="pb-3">Ward</th><th className="pb-3">Available</th><th className="pb-3">Recommended</th><th className="pb-3">Reserved</th><th className="pb-3">Unmet</th></tr></thead><tbody>{result.ward_results.map((ward) => <tr key={ward.ward_id} className="border-b border-[#edf3f4] last:border-0"><td className="py-4 font-bold">{ward.ward_name}</td><td className="py-4">{ward.available_beds}</td><td className="py-4 font-bold text-[#3f897b]">{ward.recommended_allocation.toFixed(1)}</td><td className="py-4">{ward.reserved_beds.toFixed(1)}</td><td className="py-4">{ward.unmet_demand.toFixed(1)}</td></tr>)}</tbody></table></div></section> }
+
+function PageHeading({ eyebrow, title, description, action, onAction }) { return <div className="flex flex-col justify-between gap-5 md:flex-row md:items-end"><div><p className="eyebrow">{eyebrow}</p><h1 className="mt-2 text-3xl font-semibold tracking-tight text-[#17324d] sm:text-4xl">{title}</h1><p className="mt-3 max-w-2xl text-[#718899]">{description}</p></div>{action && <button onClick={onAction} className="rounded-xl bg-[#123e52] px-4 py-3 text-sm font-bold text-white">{action} →</button>}</div> }
+function Metric({ label, value }) { return <div className="rounded-xl border border-white/10 bg-white/5 p-3"><p className="text-xl font-bold">{value}</p><p className="mt-1 text-[11px] leading-4 text-[#9fc2c8]">{label}</p></div> }
+function PlaceholderCard({ title, value, detail }) { return <div className="panel"><p className="eyebrow">{title}</p><p className="mt-4 text-3xl font-semibold">{value}</p><p className="mt-2 text-sm text-[#718899]">{detail}</p></div> }
+function StatCard({ label, value, note, tone }) {
+  const colors = {
+    mint: 'bg-[#e7f1eb] text-[#3f897b]',
+    blue: 'bg-[#e6f1f5] text-[#3f8298]',
+    coral: 'bg-[#fae9e4] text-[#bd6857]',
+    gold: 'bg-[#f8f0da] text-[#a17b2e]',
+  }
+
+  return (
+    <div className="panel">
+      <div className={`mb-5 grid h-9 w-9 place-items-center rounded-xl text-xs font-black ${colors[tone]}`}>
+        +
+      </div>
+      <p className="text-3xl font-semibold text-[#17324d]">{value}</p>
+      <p className="mt-1 text-sm font-bold">{label}</p>
+      <p className="mt-2 text-xs text-[#8294a0]">{note}</p>
+    </div>
+  )
+}
+export default App

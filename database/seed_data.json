@@ -1,0 +1,54 @@
+{
+  "_comment": "Reference seed data for Hospital Robust Optimization demo. Actual seeding is done by backend/seed.js",
+
+  "wards": [
+    { "name": "ICU",       "totalBeds": 30, "nominalDemand": 25, "maximumDeviation": 5  },
+    { "name": "General",   "totalBeds": 80, "nominalDemand": 60, "maximumDeviation": 10 },
+    { "name": "Surgical",  "totalBeds": 50, "nominalDemand": 35, "maximumDeviation": 8  },
+    { "name": "Emergency", "totalBeds": 40, "nominalDemand": 40, "maximumDeviation": 12 }
+  ],
+
+  "bedDistribution": {
+    "ICU":       { "occupied": 18, "available": 8,  "reserved": 3, "maintenance": 1 },
+    "General":   { "occupied": 52, "available": 20, "reserved": 6, "maintenance": 2 },
+    "Surgical":  { "occupied": 30, "available": 14, "reserved": 5, "maintenance": 1 },
+    "Emergency": { "occupied": 28, "available": 8,  "reserved": 3, "maintenance": 1 }
+  },
+
+  "totalBeds": 200,
+
+  "users": [
+    { "name": "Admin User",        "email": "admin@hospital.com",   "role": "admin",       "password": "Admin@1234"   },
+    { "name": "Dr. Sarah Connor",  "email": "doctor@hospital.com",  "role": "doctor",      "password": "Doctor@1234"  },
+    { "name": "Operations Manager","email": "manager@hospital.com", "role": "bed_manager", "password": "Manager@1234" }
+  ],
+
+  "samplePatients": [
+    { "name": "Alice Johnson", "age": 45, "gender": "female", "condition": "Cardiac Arrest",      "priority": "critical", "ward": "ICU",       "los": 7,  "status": "admitted"   },
+    { "name": "Bob Martinez",  "age": 62, "gender": "male",   "condition": "Post-CABG Recovery",  "priority": "high",     "ward": "ICU",       "los": 5,  "status": "admitted"   },
+    { "name": "Emma Davis",    "age": 29, "gender": "female", "condition": "Appendectomy",         "priority": "medium",   "ward": "Surgical",  "los": 3,  "status": "admitted"   },
+    { "name": "Mia Allen",     "age": 25, "gender": "female", "condition": "Trauma - MVA",         "priority": "critical", "ward": "Emergency", "los": 1,  "status": "admitted"   },
+    { "name": "Quinn Baker",   "age": 30, "gender": "male",   "condition": "Elective Surgery",     "priority": "low",      "ward": "Surgical",  "los": 3,  "status": "waiting"    },
+    { "name": "Uma Green",     "age": 58, "gender": "female", "condition": "Pneumonia - Resolved", "priority": "medium",   "ward": "General",   "los": 5,  "status": "discharged" }
+  ],
+
+  "demandRecords": {
+    "_comment": "7 days of demand records created per ward (today + 6 historical days)",
+    "daysSeeded": 7
+  },
+
+  "gammaValues": [0, 1, 2, 3, 4],
+
+  "optimizationNotes": {
+    "model": "Bertsimas-Sim Gamma-robust counterpart",
+    "variables": {
+      "D_i": "nominal demand for ward i",
+      "U_i": "maximum demand deviation for ward i",
+      "x_i": "beds allocated to ward i (decision variable)",
+      "z_i": "uncertainty variable in [0,1] for ward i",
+      "Gamma": "uncertainty budget — max number of wards that can simultaneously hit worst-case demand"
+    },
+    "constraint": "sum(z_i) <= Gamma",
+    "worstCaseDemand": "D_i + z_i * U_i"
+  }
+}

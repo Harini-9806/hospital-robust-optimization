@@ -1,0 +1,60 @@
+const express = require('express');
+const { protect } = require('../middleware/auth');
+
+const router = express.Router();
+const optimizationServiceUrl =
+  process.env.OPTIMIZATION_SERVICE_URL || 'http://127.0.0.1:8000/optimize';
+const optimizationTimeoutMs = Number(process.env.OPTIMIZATION_TIMEOUT_MS || 10000);
+
+router.post('/optimize', protect, async (req, res) => {
+  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+    return res.status(400).json({
+      success: false,
+      message: 'A JSON optimization request body is required',
+    });
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), optimizationTimeoutMs);
+
+  try {
+    const response = await fetch(optimizationServiceUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body),
+      signal: controller.signal,
+    });
+
+    const contentType = response.headers.get('content-type') || '';
+    const payload = contentType.includes('application/json')
+      ? await response.json()
+      : await response.text();
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        success: false,
+        message: 'Optimization service rejected the request',
+        details: payload,
+      });
+    }
+
+    return res.status(response.status).json(payload);
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      return res.status(504).json({
+        success: false,
+        message: 'Optimization service timed out',
+      });
+    }
+
+    console.error('Optimization service request failed:', error.message);
+    return res.status(503).json({
+      success: false,
+      message: 'Optimization service is unavailable',
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+});
+
+module.exports = router;
